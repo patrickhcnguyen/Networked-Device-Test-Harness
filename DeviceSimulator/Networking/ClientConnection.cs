@@ -23,6 +23,7 @@ using System;
 using System.Net.Sockets;
 using System.Threading.Tasks;
 using System.Text;
+using DeviceSimulator.Handling;
 namespace DeviceSimulator.Networking {
     /*
     - Responsible for:
@@ -33,19 +34,22 @@ namespace DeviceSimulator.Networking {
     */
     class ClientConnection {
         private readonly TcpClient _client;
+        private readonly CommandHandler _handler;
         private readonly StringBuilder _buffer = new StringBuilder();
-        public ClientConnection(TcpClient client) {
+        private NetworkStream _stream;
+        public ClientConnection(TcpClient client, CommandHandler handler) {
             _client = client;
+            _handler = handler;
         }
         // entry point for handling this connection
         public async Task RunAsync() {
             try {
                 // get into the network stream
-                NetworkStream stream = _client.GetStream();
+                _stream = _client.GetStream();
                 byte[] buffer = new byte[256];
                 int bytesRead;
 
-                while ((bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length)) != 0) {
+                while ((bytesRead = await _stream.ReadAsync(buffer, 0, buffer.Length)) != 0) {
                     string chunk = Encoding.UTF8.GetString(buffer, 0, bytesRead);
                     AppendToBuffer(chunk);
                     Console.WriteLine($"Received {bytesRead} bytes");
@@ -82,10 +86,12 @@ namespace DeviceSimulator.Networking {
             return false;
         }
         // handles a fully received message, but for now we just log it
-        private Task HandleMessageAsync(string message) {
-            // for now just log it, later forward to the message handler
-            Console.WriteLine($"Received message: {message}");
-            return Task.CompletedTask;
+        private async Task HandleMessageAsync(string message) {
+            // forward to the message handler
+            string response = _handler.HandleCommand(message);
+            response += "\n";
+            byte[] bytes = Encoding.UTF8.GetBytes(response);
+            await _stream.WriteAsync(bytes, 0 , bytes.Length);
         }
         // clean up resources
         private void Close() {

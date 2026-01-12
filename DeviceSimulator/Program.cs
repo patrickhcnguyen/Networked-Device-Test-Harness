@@ -7,6 +7,8 @@ using System.Net;
 using System.Net.Sockets;
 using System.Threading.Tasks;
 using DeviceSimulator.Networking;
+using DeviceSimulator.Handling;
+using DeviceSimulator.State;
 namespace DeviceSimulator
 {
     class FakeDeviceServer
@@ -24,10 +26,14 @@ namespace DeviceSimulator
 
             while (true) {
                 Console.WriteLine("Waiting for a connection...");
-                TcpClient client = await server.AcceptTcpClientAsync();
-                Console.WriteLine($"Connected to {client.Client.RemoteEndPoint}");
+                // TcpClient client = await server.AcceptTcpClientAsync();
+                var state = new DeviceState();
+                var handler = new CommandHandler(state);
 
-                _ = new ClientConnection(client).RunAsync();
+                while (true) {
+                    TcpClient client = await server.AcceptTcpClientAsync();
+                    _ = new ClientConnection(client, handler).RunAsync();
+                }
             }
         }
     }
