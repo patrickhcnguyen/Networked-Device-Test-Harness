@@ -10,12 +10,16 @@ POWER OFF -> power off
 
 invalid commands -> ERROR <reason>
 */
+
+// we should start adding concurrency safety here so that multiple clients can connection and issue commands without corrupting state
+// we can use a simple lock to protect the state, we care more about correctness than throughput here
 using System;
 using DeviceSimulator.State;
 namespace DeviceSimulator.Handling {
 
     class CommandHandler {
         private readonly DeviceState _state;
+        private readonly object _lock = new();
         public CommandHandler(DeviceState state) {
             _state = state;
         }
@@ -52,7 +56,9 @@ namespace DeviceSimulator.Handling {
 
         private string HandleStatus() {
             // read devicestate and format response
-            return $"OK INPUT={_state.Input} POWER={(_state.PowerOn ? "ON" : "OFF")}";
+            lock (_lock) {
+                return $"OK INPUT={_state.Input} POWER={(_state.PowerOn ? "ON" : "OFF")}";
+            }
         }
 
         private string HandleSetInput(string input) {
@@ -63,8 +69,10 @@ namespace DeviceSimulator.Handling {
                 return Error($"Invalid input value: {input}");
             }
 
-            _state.Input = normalized;
-            return "OK";
+            lock (_lock) {
+                _state.Input = normalized;
+                return "OK";
+            }
         }
 
         private string HandlePower(string value) {
@@ -75,10 +83,12 @@ namespace DeviceSimulator.Handling {
                 return Error($"Invalid power value: {value}");
             }
 
-            if (normalized == "ON") {
-                _state.PowerOn = true;
-            } else {
-                _state.PowerOn = false;
+            lock (_lock) {
+                if (normalized == "ON") {
+                    _state.PowerOn = true;
+                } else {
+                    _state.PowerOn = false;
+                }
             }
             return "OK";
         }
