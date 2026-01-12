@@ -46,7 +46,12 @@ namespace DeviceSimulator.Networking {
                 int bytesRead;
 
                 while ((bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length)) != 0) {
+                    string chunk = Encoding.UTF8.GetString(buffer, 0, bytesRead);
+                    AppendToBuffer(chunk);
                     Console.WriteLine($"Received {bytesRead} bytes");
+                    while (TryGetNextMessage(out string message)) {
+                        await HandleMessageAsync(message);
+                    }
                 }
             } catch (Exception ex) {
                 Console.WriteLine($"Error: {ex.Message}");
@@ -60,17 +65,26 @@ namespace DeviceSimulator.Networking {
         }
         // appends newly receieved data to an internal transfer
         private void AppendToBuffer(string data) {
-
+            // we now append the text to _buffer
+            _buffer.Append(data);
         }
         // attempts to extract one complete message from the buffer, messages are newline-delimited
         private bool TryGetNextMessage(out string message) {
+            // look for \n to extract one complete line, remove it from _buffer, and return true if found (core tcp concept) 
             message = string.Empty;
-            // return true if a message was found
+            for (int i = 0; i < _buffer.Length; i++) {
+                if (_buffer[i] == '\n') {
+                    message = _buffer.ToString(0, i);
+                    _buffer.Remove(0, i + 1);
+                    return true;
+                }
+            }
             return false;
         }
         // handles a fully received message, but for now we just log it
         private Task HandleMessageAsync(string message) {
             // for now just log it, later forward to the message handler
+            Console.WriteLine($"Received message: {message}");
             return Task.CompletedTask;
         }
         // clean up resources
