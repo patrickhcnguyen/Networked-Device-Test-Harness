@@ -19,11 +19,13 @@ This file will:
 
 // writeasync(byte[], int32, int32) writes a sequence of bytes to the curr stream and advances the curr pos within this stream by the number of bytes written
 // a networkstream is a continuous stream of bytes not messages
+
 using System;
 using System.Net.Sockets;
 using System.Threading.Tasks;
 using System.Text;
 using DeviceSimulator.Handling;
+using System.Linq;
 namespace DeviceSimulator.Networking {
     /*
     - Responsible for:
@@ -78,7 +80,14 @@ namespace DeviceSimulator.Networking {
             message = string.Empty;
             for (int i = 0; i < _buffer.Length; i++) {
                 if (_buffer[i] == '\n') {
-                    message = _buffer.ToString(0, i);
+                    // message = _buffer.ToString(0, i);
+                    // _buffer.Remove(0, i + 1);
+                    // return true;
+                    int messageLength = i;
+                    if (i > 0 && _buffer[i - 1] == '\r') {
+                        messageLength--;
+                    }
+                    message = _buffer.ToString(0, messageLength);
                     _buffer.Remove(0, i + 1);
                     return true;
                 }
@@ -87,8 +96,13 @@ namespace DeviceSimulator.Networking {
         }
         // handles a fully received message, but for now we just log it
         private async Task HandleMessageAsync(string message) {
+            // Console.WriteLine(">>> CLIENTCONNECTION HandleMessageAsync HIT");
+
             // forward to the message handler
-            string response = _handler.HandleCommand(message);
+            string normalized = new string(
+                message.Where(c => !char.IsControl(c)).ToArray()
+            );
+            string response = _handler.HandleCommand(normalized);
             response += "\n";
             byte[] bytes = Encoding.UTF8.GetBytes(response);
             await _stream.WriteAsync(bytes, 0 , bytes.Length);
