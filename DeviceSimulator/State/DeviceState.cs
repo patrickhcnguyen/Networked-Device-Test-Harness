@@ -21,7 +21,12 @@ We do this to fake our hardware and make it appear as if we are a real device
 namespace DeviceSimulator.State {
     class DeviceState {
         // simulates hardware memory
-        public bool PowerOn = true;
-        public string Input = "HDMI1"; 
+        public bool PowerOn;
+        public string Input;
+
+        public DeviceState() {
+            PowerOn = true;
+            Input = "HDMI1";
+        }
     }
 }
