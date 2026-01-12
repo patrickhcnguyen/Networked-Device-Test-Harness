@@ -2,11 +2,11 @@
 A TCP server listens on a port, accepts client connections, read bytes, and writes bytes back
 This program is entry point and lifecycle owner, and is responsible for starting the listener, accepting clients, and handing connections to the handler
 */
-using System;using System;
+using System;
 using System.Net;
 using System.Net.Sockets;
 using System.Threading.Tasks;
-
+using DeviceSimulator.Networking;
 namespace DeviceSimulator
 {
     class FakeDeviceServer
@@ -27,20 +27,8 @@ namespace DeviceSimulator
                 TcpClient client = await server.AcceptTcpClientAsync();
                 Console.WriteLine($"Connected to {client.Client.RemoteEndPoint}");
 
-                _ = HandleClientAsync(client);
+                _ = new ClientConnection(client).RunAsync();
             }
-        }
-        static async Task HandleClientAsync(TcpClient client) {
-            using (client) {
-                NetworkStream stream = client.GetStream();
-                byte[] buffer = new byte[256];
-                int bytesRead;
-
-                while ((bytesRead = await stream.ReadAsync(buffer, 0, buffer.Length)) != 0) {
-                    Console.WriteLine($"Received {bytesRead} bytes");
-                }
-            }
-            Console.WriteLine("Client disconnected");
         }
     }
 }
