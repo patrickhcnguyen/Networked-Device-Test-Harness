@@ -82,5 +82,9 @@ namespace DeviceSimulator.Handling {
             }
             return "OK";
         }
+
+        private string Error(string message) {
+            return $"ERROR: {message}";
+        }
     }
 }
