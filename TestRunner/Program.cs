@@ -34,6 +34,7 @@ using System.Net;
 using System.IO;
 using System.Collections.Generic;
 using System.Linq;
+using Persistence;
 
 namespace TestRunner
 {
@@ -52,44 +53,52 @@ namespace TestRunner
     {
         public static async Task Main(string[] args)
         {
-            try
+            using (var logService = new TestLogService())
             {
-                using (var client = new TcpClient())
+                try
                 {
-                    await client.ConnectAsync(IPAddress.Loopback, 13000);
-                    bool function_passed = await FunctionalTest(client);
-
-                    if (!function_passed)
+                    using (var client = new TcpClient())
                     {
-                        Console.WriteLine("At least one functional test failed");
+                        await client.ConnectAsync(IPAddress.Loopback, 13000);
+                        bool function_passed = await FunctionalTest(client, logService);
+
+                        if (!function_passed)
+                        {
+                            await logService.LogTestFailAsync("Functional Tests", "suite", null, null, null, "At least one functional test failed");
+                            Console.WriteLine("At least one functional test failed");
+                            Environment.Exit(1);
+                        }
+                        await logService.LogTestPassAsync("Functional Tests", "suite");
+                        Console.WriteLine("--------------------------------");
+                        Console.WriteLine("All functional tests passed");
+                        Console.WriteLine("--------------------------------");
+                    }
+
+                    bool concurrency_passed = await ConcurrencyTest(logService);
+
+                    if (!concurrency_passed)
+                    {
+                        await logService.LogTestFailAsync("Concurrency Tests", "suite", null, null, null, "At least one concurrency test failed");
+                        Console.WriteLine("At least one concurrency test failed");
                         Environment.Exit(1);
                     }
+                    await logService.LogTestPassAsync("Concurrency Tests", "suite");
                     Console.WriteLine("--------------------------------");
-                    Console.WriteLine("All functional tests passed");
+                    Console.WriteLine("All concurrency tests passed");
                     Console.WriteLine("--------------------------------");
+
+                    Environment.Exit(0);
                 }
-
-                bool concurrency_passed = await ConcurrencyTest();
-
-                if (!concurrency_passed)
+                catch (Exception ex)
                 {
-                    Console.WriteLine("At least one concurrency test failed");
+                    await logService.LogTestFailAsync("Test Execution", "system", null, null, null, ex.Message);
+                    Console.WriteLine($"Test execution failed: {ex.Message}");
                     Environment.Exit(1);
                 }
-                Console.WriteLine("--------------------------------");
-                Console.WriteLine("All concurrency tests passed");
-                Console.WriteLine("--------------------------------");
-
-                Environment.Exit(0);
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"Test execution failed: {ex.Message}");
-                Environment.Exit(1);
             }
         }
 
-        public static async Task<bool> FunctionalTest(TcpClient client)
+        public static async Task<bool> FunctionalTest(TcpClient client, TestLogService logService)
         {
             NetworkStream stream = client.GetStream();
             var reader = new StreamReader(stream, Encoding.UTF8);
@@ -102,16 +111,19 @@ namespace TestRunner
             string? response = await reader.ReadLineAsync();
             if (response == null)
             {
+                await logService.LogTestFailAsync("STATUS default", "functional", "STATUS", "OK INPUT=HDMI1 POWER=ON", null, "No response received from device");
                 Console.WriteLine("Test 1 failed: No response received from device");
                 return false;
             }
             if (response != "OK INPUT=HDMI1 POWER=ON")
             {
+                await logService.LogTestFailAsync("STATUS default", "functional", "STATUS", "OK INPUT=HDMI1 POWER=ON", response, "STATUS response mismatch");
                 Console.WriteLine("Test 1 failed: STATUS response mismatch");
                 Console.WriteLine("EXPECTED: OK INPUT=HDMI1 POWER=ON");
                 Console.WriteLine($"ACTUAL: {response}");
                 return false;
             }
+            await logService.LogTestPassAsync("STATUS default", "functional", "STATUS", "OK INPUT=HDMI1 POWER=ON", response);
             Console.WriteLine("--------------------------------");
             Console.WriteLine("[1/7 PASS]: STATUS default");
             Console.WriteLine("EXPECTED: OK INPUT=HDMI1 POWER=ON");
@@ -269,7 +281,7 @@ namespace TestRunner
         }
         // concurrency test doesn,t take in a tcp client because it will create multiple clients
         // concurrencytest is like an orchestrator, we'll have multiple clientscenarios and send N clients to each one 
-        public static async Task<bool> ConcurrencyTest()
+        public static async Task<bool> ConcurrencyTest(TestLogService logService)
         {
             // 1. Basic concurrency test
             // 2. State contention test
@@ -350,28 +362,47 @@ namespace TestRunner
                     "STATUS",
                 }
             );
-            if (!await RunConcurrencyTest("Contention", new[] { (readOnlyScript, 5), (contentionScript, 5) }))
+
+            var resetStateScript = new ClientScript(
+                name: "ResetState",
+                commands: new string[] {
+                    "POWER ON",
+                    "SET_INPUT HDMI1",
+                }
+            );
+
+            if (!await RunConcurrencyTest("ReadOnly", new[] { (readOnlyScript, 100) }, logService))
+            {
+                return false;
+            }
+            if (!await RunConcurrencyTest("Mutating", new[] { (mutatingScript, 5) }, logService))
+            {
+                return false;
+            }
+            if (!await RunConcurrencyTest("Contention", new[] { (readOnlyScript, 5), (contentionScript, 5) }, logService))
             {
                 return false;
             }
 
-            if (!await RunConcurrencyTest("Ordering", new[] { (readOnlyScript, 5), (orderingScript, 5) }))
+            if (!await RunConcurrencyTest("Ordering", new[] { (readOnlyScript, 5), (orderingScript, 5) }, logService))
             {
                 return false;
             }
 
-            if (!await RunConcurrencyTest("Soak", new[] { (readOnlyScript, 5), (soakScript, 5) }))
+            if (!await RunConcurrencyTest("Soak", new[] { (readOnlyScript, 5), (soakScript, 5) }, logService))
             {
                 return false;
             }
 
-            if (!await RunConcurrencyTest("ErrorHandling", new[] { (readOnlyScript, 5), (errorHandlingScript, 5) }))
+            if (!await RunConcurrencyTest("ErrorHandling", new[] { (readOnlyScript, 5), (errorHandlingScript, 5) }, logService))
             {
                 return false;
             }
+
+            await RunConcurrencyTest("ResetState", new[] { (resetStateScript, 1) }, logService);
             return true;
         }
-        private static async Task<bool> RunConcurrencyTest(string testName, (ClientScript script, int count)[] groups)
+        private static async Task<bool> RunConcurrencyTest(string testName, (ClientScript script, int count)[] groups, TestLogService logService)
         {
             Console.WriteLine($"Running {testName}");
 
@@ -391,10 +422,12 @@ namespace TestRunner
 
             if (results.Any(r => !r))
             {
+                await logService.LogTestFailAsync(testName, "concurrency", null, null, null, "One or more client tests failed");
                 Console.WriteLine($"[FAIL] {testName}");
                 return false;
             }
 
+            await logService.LogTestPassAsync(testName, "concurrency");
             Console.WriteLine($"[PASS] {testName}");
             return true;
         }
