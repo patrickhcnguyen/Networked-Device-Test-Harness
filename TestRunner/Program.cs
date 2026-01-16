@@ -108,7 +108,14 @@ namespace TestRunner
             // 1. Test STATUS
             await writer.WriteLineAsync("STATUS");
 
-            string? response = await reader.ReadLineAsync();
+            var readTask = reader.ReadLineAsync();
+            if (await Task.WhenAny(readTask, Task.Delay(2000)) != readTask)
+            {
+                await logService.LogTestFailAsync("STATUS default", "functional", "STATUS", "OK INPUT=HDMI1 POWER=ON", null, "Timeout waiting for response");
+                Console.WriteLine("Test 1 failed: Timeout waiting for response");
+                return false;
+            }
+            string? response = readTask.Result;
             if (response == null)
             {
                 await logService.LogTestFailAsync("STATUS default", "functional", "STATUS", "OK INPUT=HDMI1 POWER=ON", null, "No response received from device");
@@ -133,7 +140,13 @@ namespace TestRunner
             // 2. Test SET_INPUT HDMI2
             await writer.WriteLineAsync("SET_INPUT HDMI2");
 
-            response = await reader.ReadLineAsync();
+            readTask = reader.ReadLineAsync();
+            if (await Task.WhenAny(readTask, Task.Delay(2000)) != readTask)
+            {
+                Console.WriteLine("Test 2 failed: Timeout waiting for response");
+                return false;
+            }
+            response = readTask.Result;
             if (response == null)
             {
                 Console.WriteLine("Test 2 failed: No response received from device");
@@ -153,7 +166,13 @@ namespace TestRunner
             Console.WriteLine("--------------------------------");
             // 3. Test STATUS after SET_INPUT
             await writer.WriteLineAsync("STATUS");
-            response = await reader.ReadLineAsync();
+            readTask = reader.ReadLineAsync();
+            if (await Task.WhenAny(readTask, Task.Delay(2000)) != readTask)
+            {
+                Console.WriteLine("Test 3 failed: Timeout waiting for response");
+                return false;
+            }
+            response = readTask.Result;
             if (response == null)
             {
                 Console.WriteLine("Test 3 failed: No response received from device");
@@ -174,7 +193,13 @@ namespace TestRunner
 
             // 4. Test POWER OFF
             await writer.WriteLineAsync("POWER OFF");
-            response = await reader.ReadLineAsync();
+            readTask = reader.ReadLineAsync();
+            if (await Task.WhenAny(readTask, Task.Delay(2000)) != readTask)
+            {
+                Console.WriteLine("Test 4 failed: Timeout waiting for response");
+                return false;
+            }
+            response = readTask.Result;
             if (response == null)
             {
                 Console.WriteLine("Test 4 failed: No response received from device");
@@ -195,7 +220,13 @@ namespace TestRunner
 
             // 5. Test STATUS after POWER OFF
             await writer.WriteLineAsync("STATUS");
-            response = await reader.ReadLineAsync();
+            readTask = reader.ReadLineAsync();
+            if (await Task.WhenAny(readTask, Task.Delay(2000)) != readTask)
+            {
+                Console.WriteLine("Test 5 failed: Timeout waiting for response");
+                return false;
+            }
+            response = readTask.Result;
             if (response == null)
             {
                 Console.WriteLine("Test 5 failed: No response received from device");
@@ -216,7 +247,13 @@ namespace TestRunner
 
             // 6. Test POWER ON
             await writer.WriteLineAsync("POWER ON");
-            response = await reader.ReadLineAsync();
+            readTask = reader.ReadLineAsync();
+            if (await Task.WhenAny(readTask, Task.Delay(2000)) != readTask)
+            {
+                Console.WriteLine("Test 6 failed: Timeout waiting for response");
+                return false;
+            }
+            response = readTask.Result;
             if (response == null)
             {
                 Console.WriteLine("Test 6 failed: No response received from device");
@@ -237,7 +274,13 @@ namespace TestRunner
 
             // 7. Test STATUS after POWER ON
             await writer.WriteLineAsync("STATUS");
-            response = await reader.ReadLineAsync();
+            readTask = reader.ReadLineAsync();
+            if (await Task.WhenAny(readTask, Task.Delay(2000)) != readTask)
+            {
+                Console.WriteLine("Test 7 failed: Timeout waiting for response");
+                return false;
+            }
+            response = readTask.Result;
             if (response == null)
             {
                 Console.WriteLine("Test 7 failed: No response received from device");
@@ -258,7 +301,13 @@ namespace TestRunner
 
             // 8. Test SET_INPUT HDMI1
             await writer.WriteLineAsync("SET_INPUT HDMI1");
-            response = await reader.ReadLineAsync();
+            readTask = reader.ReadLineAsync();
+            if (await Task.WhenAny(readTask, Task.Delay(2000)) != readTask)
+            {
+                Console.WriteLine("Test 8 failed: Timeout waiting for response");
+                return false;
+            }
+            response = readTask.Result;
             if (response == null)
             {
                 Console.WriteLine("Test 8 failed: No response received from device");
@@ -485,7 +534,15 @@ namespace TestRunner
                 foreach (var command in script.Commands)
                 {
                     await writer.WriteLineAsync(command);
-                    string? response = await reader.ReadLineAsync();
+                    var readTask = reader.ReadLineAsync();
+                    if (await Task.WhenAny(readTask, Task.Delay(2000)) != readTask)
+                    {
+                        Console.WriteLine(
+                            $"Client {clientId} ({script.Name}) failed: Timeout waiting for response"
+                        );
+                        return false;
+                    }
+                    string? response = readTask.Result;
 
                     if (response == null)
                     {
